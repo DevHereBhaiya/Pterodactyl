@@ -1,4 +1,4 @@
-name: Pterodactyl
+name: Pterodactyl-Full
 
 on:
   workflow_dispatch:
@@ -21,10 +21,22 @@ jobs:
           /etc/pterodactyl
         key: ptero-cache
 
-    - name: Install packages
+    - name: Install Docker & Packages
       run: |
         sudo apt update
-        sudo apt install curl tar unzip php php-cli php-mysql php-xml php-mbstring composer docker.io screen -y
+
+        # fix docker conflict
+        sudo apt remove containerd -y || true
+        curl -fsSL https://get.docker.com | sudo sh
+
+        sudo apt install php php-cli php-mysql php-xml php-mbstring composer curl tar unzip screen openssh-server -y
+
+    - name: Create Root User & Password
+      run: |
+        echo "root:root" | sudo chpasswd
+        sudo sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+        sudo sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config || true
+        sudo service ssh restart
 
     - name: Install Panel
       run: |
@@ -44,6 +56,14 @@ jobs:
         sudo curl -L -o /usr/local/bin/wings \
         https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_amd64
         sudo chmod +x /usr/local/bin/wings
+
+    - name: Install tmate (SSH access)
+      run: |
+        sudo apt install tmate -y
+        tmate -S /tmp/tmate.sock new-session -d
+        tmate -S /tmp/tmate.sock wait tmate-ready
+        echo "SSH:"
+        tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}'
 
     - name: Start Panel
       run: |
