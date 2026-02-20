@@ -1,4 +1,4 @@
-name: Pterodactyl-Full
+name: Pterodactyl-Permanent-Full
 
 on:
   workflow_dispatch:
@@ -21,17 +21,20 @@ jobs:
           /etc/pterodactyl
         key: ptero-cache
 
-    - name: Install Docker & Packages
+    - name: Install Docker & Dependencies
       run: |
         sudo apt update
 
-        # fix docker conflict
+        # remove conflicting containerd
         sudo apt remove containerd -y || true
+
+        # install docker official
         curl -fsSL https://get.docker.com | sudo sh
 
-        sudo apt install php php-cli php-mysql php-xml php-mbstring composer curl tar unzip screen openssh-server -y
+        # install required packages
+        sudo apt install php php-cli php-mysql php-xml php-mbstring composer curl tar unzip screen openssh-server tmate -y
 
-    - name: Create Root User & Password
+    - name: Set Root Password
       run: |
         echo "root:root" | sudo chpasswd
         sudo sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
@@ -42,28 +45,33 @@ jobs:
       run: |
         mkdir -p ptero
         cd ptero
+
         if [ ! -f artisan ]; then
+
           curl -Lo panel.tar.gz https://github.com/pterodactyl/panel/releases/latest/download/panel.tar.gz
+
           tar -xzvf panel.tar.gz
+
           cp .env.example .env
+
           composer install --no-dev
+
           php artisan key:generate --force
+
         fi
 
     - name: Install Wings
       run: |
         sudo mkdir -p /etc/pterodactyl
-        sudo curl -L -o /usr/local/bin/wings \
-        https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_amd64
-        sudo chmod +x /usr/local/bin/wings
 
-    - name: Install tmate (SSH access)
-      run: |
-        sudo apt install tmate -y
-        tmate -S /tmp/tmate.sock new-session -d
-        tmate -S /tmp/tmate.sock wait tmate-ready
-        echo "SSH:"
-        tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}'
+        if [ ! -f /usr/local/bin/wings ]; then
+
+          sudo curl -L -o /usr/local/bin/wings \
+          https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_amd64
+
+          sudo chmod +x /usr/local/bin/wings
+
+        fi
 
     - name: Start Panel
       run: |
@@ -74,6 +82,17 @@ jobs:
       run: |
         sudo screen -dmS wings wings
 
-    - name: Keep Alive
+    - name: Start tmate SSH (Permanent)
       run: |
+
+        tmate -S /tmp/tmate.sock new-session -d
+
+        tmate -S /tmp/tmate.sock wait tmate-ready
+
+        echo "=============================="
+        echo "SSH LOGIN:"
+        tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}'
+        echo "ROOT PASSWORD: root"
+        echo "=============================="
+
         while true; do sleep 300; done
