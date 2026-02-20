@@ -1,0 +1,59 @@
+name: Pterodactyl
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */5 * * *'
+
+jobs:
+  ptero:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+
+    steps:
+
+    - name: Restore Cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ptero
+          /var/lib/pterodactyl
+          /etc/pterodactyl
+        key: ptero-cache
+
+    - name: Install packages
+      run: |
+        sudo apt update
+        sudo apt install curl tar unzip php php-cli php-mysql php-xml php-mbstring composer docker.io screen -y
+
+    - name: Install Panel
+      run: |
+        mkdir -p ptero
+        cd ptero
+        if [ ! -f artisan ]; then
+          curl -Lo panel.tar.gz https://github.com/pterodactyl/panel/releases/latest/download/panel.tar.gz
+          tar -xzvf panel.tar.gz
+          cp .env.example .env
+          composer install --no-dev
+          php artisan key:generate --force
+        fi
+
+    - name: Install Wings
+      run: |
+        sudo mkdir -p /etc/pterodactyl
+        sudo curl -L -o /usr/local/bin/wings \
+        https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_amd64
+        sudo chmod +x /usr/local/bin/wings
+
+    - name: Start Panel
+      run: |
+        cd ptero
+        screen -dmS panel php artisan serve --host=0.0.0.0 --port=8080
+
+    - name: Start Wings
+      run: |
+        sudo screen -dmS wings wings
+
+    - name: Keep Alive
+      run: |
+        while true; do sleep 300; done
